@@ -1,4 +1,4 @@
-// Nathan Thoams
+// Nathan Thomas
 // p. 123, 133, 138
 
 public class SpaService
