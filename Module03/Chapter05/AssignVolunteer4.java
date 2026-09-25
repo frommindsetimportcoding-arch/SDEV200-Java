@@ -52,7 +52,7 @@ public class AssignVolunteer4
             }
             default:
             {
-                volunteer = "invalid";
+                volunteer = INVALID_PRICER;
                 message = "an invalid donation type";
             }
         }
