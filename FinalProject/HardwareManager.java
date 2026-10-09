@@ -26,8 +26,10 @@ public class HardwareManager
             try
             {
                 MidiDevice device = MidiSystem.getMidiDevice(info);
-                // Filters for devices capable of transmitting data (as midi)
-                if (device.getMaxTransmitters() != 0)
+                // Filters for devices capable of transmitting data (as MIDI)
+                // Also ignores Java's internal software engines, since they are not active
+                // physical instrument streams.
+                if (device.getMaxTransmitters() != 0 && !info.getName().contains("Sequencer"))
                 {
                     controllers.add(info);
                 }
@@ -41,4 +43,85 @@ public class HardwareManager
     }
     // Still need to connect to the device and bind to it for continue input
     // listening.
+
+    public void connectDevice(MidiDevice.Info deviceInfo) throws MidiUnavailableException
+    {
+        if (inputDevice != null && inputDevice.isOpen())
+        {
+            inputDevice.close();
+        }
+
+        inputDevice = MidiSystem.getMidiDevice(deviceInfo);
+        inputDevice.open();
+
+        Transmitter transmitter = inputDevice.getTransmitter();
+        transmitter.setReceiver(new MidiInputReceiver());
+        System.out.println("Successfully hooked stream to: " + deviceInfo.getName());
+    }
+
+    public void setActiveFormula(ChordFormula formula)
+    {
+        this.activeFormula = formula;
+    }
+
+    /**
+     * Inner class implementing the core Java MIDI pipeline callback
+     */
+    private class MidiInputReceiver implements Receiver
+    {
+        @Override
+        public void send(MidiMessage message, long timeStamp)
+        {
+            if (message instanceof ShortMessage)
+            {
+                ShortMessage sm = (ShortMessage) message;
+                int command = sm.getCommand();
+                int key = sm.getData1();
+                int velocity = sm.getData2();
+
+                // Selection and logic processing of real-time stream status bytes
+                switch (command)
+                {
+                    case ShortMessage.NOTE_ON:
+                        if (velocity > 0)
+                        {
+                            processNoteOn(key, velocity);
+                        }
+                        else
+                        {
+                            processNoteOff(key); // some controllers will send a velocity of 0 for note off.
+                        }
+                        break;
+                    case ShortMessage.NOTE_OFF:
+                        processNoteOff(key);
+                        break;
+                }
+            }
+        }
+
+        private void processNoteOn(int rootNote, int velocity)
+        {
+            int[] chordPitches = activeFormula.generateChordNotes(rootNote);
+            System.out.print("Triggered " + activeFormula.getName() + " -> ");
+            for (int note : chordPitches)
+            {
+                System.out.print(note + " ");
+            }
+            System.out.println("[Velocity: " + velocity + "]");
+
+            // TODO: Pass chordPitches array to SwingUI thread via
+            // SwingUtilities.invokelater()
+        }
+
+        private void processNoteOff(int rootNote)
+        {
+            // Will handle stopping notes
+        }
+
+        @Override
+        public void close()
+        {
+            System.out.println("MIDI stream detached safely.");
+        }
+    }
 }
